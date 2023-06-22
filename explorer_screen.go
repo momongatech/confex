@@ -1,6 +1,10 @@
 package main
 
-import tea "github.com/charmbracelet/bubbletea"
+import (
+	"os"
+
+	tea "github.com/charmbracelet/bubbletea"
+)
 
 type ExplorerScreen struct {
 	Panes         []Pane
@@ -9,12 +13,13 @@ type ExplorerScreen struct {
 }
 
 func NewExplorerScreen() *ExplorerScreen {
-	hostPane := NewPane("host", Host)
+	wd, _ := os.Getwd()
+	hostPane := NewPane("host", Host, wd)
 	hostPane.Items = []string{
 		"usr", "lib",
 	}
 
-	containerPane := NewPane("ubuntu", Container)
+	containerPane := NewPane("ubuntu", Container, "/")
 	containerPane.Items = []string{
 		"usr", "root", "var",
 	}
@@ -61,8 +66,19 @@ func (s *ExplorerScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (s *ExplorerScreen) View() string {
+	rows := ""
+	for i, p := range s.Panes {
+		rows += p.Name
+		if i < len(s.Panes)-1 {
+			rows += " | "
+		}
+	}
+
+	rows += "\n"
+
 	activePane := s.Panes[s.ActivePaneIdx]
-	return activePane.RenderPane()
+	rows += activePane.RenderPane()
+	return rows
 }
 
 //// App-specific methods

@@ -1,5 +1,7 @@
 package main
 
+import "fmt"
+
 type PaneType int
 
 const (
@@ -8,14 +10,16 @@ const (
 )
 
 type Pane struct {
-	Name   string
-	PType  PaneType
+	Cwd    string
 	CurIdx int
 	Items  []string
+	Name   string
+	PType  PaneType
 }
 
-func NewPane(paneName string, pType PaneType) Pane {
+func NewPane(paneName string, pType PaneType, cwd string) Pane {
 	return Pane{
+		Cwd:   cwd,
 		Name:  paneName,
 		PType: pType,
 	}
@@ -32,7 +36,7 @@ func (p *Pane) CursorInc(amount int) {
 }
 
 func (p *Pane) RenderPane() string {
-	rows := p.Name + "\n"
+	rows := fmt.Sprintf("%s:%s\n", p.Name, p.Cwd)
 	for i, item := range p.Items {
 		ptrChar := "  "
 		if i == p.CurIdx {
