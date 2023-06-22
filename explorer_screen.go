@@ -15,14 +15,10 @@ type ExplorerScreen struct {
 func NewExplorerScreen() *ExplorerScreen {
 	wd, _ := os.Getwd()
 	hostPane := NewPane("host", Host, wd)
-	hostPane.Items = []string{
-		"usr", "lib",
-	}
+	hostPane.ListDir()
 
-	containerPane := NewPane("ubuntu", Container, "/")
-	containerPane.Items = []string{
-		"usr", "root", "var",
-	}
+	containerPane := NewPane("crunner", Container, "/")
+	containerPane.ListDir()
 
 	return &ExplorerScreen{
 		Panes: []Pane{
@@ -59,6 +55,7 @@ func (s *ExplorerScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, tea.Quit
 		case "o":
 			s.Parent.currentScreen = s.Parent.containerSelectionScreen
+			s.Parent.containerSelectionScreen.RefreshContainerList()
 			return s.Parent.containerSelectionScreen, nil
 		}
 	}
