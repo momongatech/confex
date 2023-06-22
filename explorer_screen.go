@@ -4,12 +4,14 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type ExplorerScreen struct {
 	Panes         []Pane
 	ActivePaneIdx int
 	Parent        *EntryApp
+	ScreenWidth   int
 }
 
 func NewExplorerScreen() *ExplorerScreen {
@@ -58,23 +60,42 @@ func (s *ExplorerScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			s.Parent.containerSelectionScreen.RefreshContainerList()
 			return s.Parent.containerSelectionScreen, nil
 		}
+	case tea.WindowSizeMsg:
+		s.ScreenWidth = msg.Width
 	}
 	return s, nil
 }
 
 func (s *ExplorerScreen) View() string {
 	rows := ""
+
+	tabItems := []string{}
 	for i, p := range s.Panes {
-		rows += p.Name
-		if i < len(s.Panes)-1 {
-			rows += " | "
+		if i == s.ActivePaneIdx {
+			tabItems = append(tabItems, lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder(), true).
+				Align(lipgloss.Center).
+				Padding(0, 2).
+				UnsetBorderBottom().
+				Render(p.Name))
+		} else {
+			tabItems = append(tabItems, lipgloss.NewStyle().
+				Border(lipgloss.HiddenBorder(), true).
+				Align(lipgloss.Center).
+				Padding(0, 2).
+				Render(p.Name))
 		}
 	}
 
+	tab := lipgloss.JoinHorizontal(lipgloss.Top, tabItems...)
+	rows += tab
 	rows += "\n"
 
-	activePane := s.Panes[s.ActivePaneIdx]
-	rows += activePane.RenderPane()
+	paneStyle := lipgloss.NewStyle().Width((s.ScreenWidth-4)/2).Border(lipgloss.RoundedBorder(), true).Height(20)
+	rows += lipgloss.JoinHorizontal(lipgloss.Top,
+		paneStyle.Render(s.Panes[0].RenderPane()),
+		paneStyle.Render(s.Panes[1].RenderPane()),
+	)
 	return rows
 }
 

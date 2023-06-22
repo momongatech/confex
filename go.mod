@@ -4,6 +4,7 @@ go 1.18
 
 require (
 	github.com/charmbracelet/bubbletea v0.24.2
+	github.com/charmbracelet/lipgloss v0.7.1
 	github.com/docker/docker v24.0.2+incompatible
 )
 

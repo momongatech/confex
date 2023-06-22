@@ -75,7 +75,7 @@ func (p *Pane) CursorInc(amount int) {
 }
 
 func (p *Pane) RenderPane() string {
-	rows := fmt.Sprintf("%s:%s\n", p.Name, p.Cwd)
+	rows := ""
 	for i, item := range p.Items {
 		ptrChar := "  "
 		if i == p.CurIdx {
