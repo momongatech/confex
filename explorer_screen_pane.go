@@ -1,4 +1,4 @@
-package explorer
+package main
 
 type PaneType int
 
@@ -32,7 +32,7 @@ func (p *Pane) CursorInc(amount int) {
 }
 
 func (p *Pane) RenderPane() string {
-	rows := ""
+	rows := p.Name + "\n"
 	for i, item := range p.Items {
 		ptrChar := "  "
 		if i == p.CurIdx {

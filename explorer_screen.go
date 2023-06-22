@@ -1,10 +1,31 @@
-package explorer
+package main
 
 import tea "github.com/charmbracelet/bubbletea"
 
 type ExplorerScreen struct {
 	Panes         []Pane
 	ActivePaneIdx int
+	Parent        *EntryApp
+}
+
+func NewExplorerScreen() *ExplorerScreen {
+	hostPane := NewPane("host", Host)
+	hostPane.Items = []string{
+		"usr", "lib",
+	}
+
+	containerPane := NewPane("ubuntu", Container)
+	containerPane.Items = []string{
+		"usr", "root", "var",
+	}
+
+	return &ExplorerScreen{
+		Panes: []Pane{
+			hostPane,
+			containerPane,
+		},
+		ActivePaneIdx: 0,
+	}
 }
 
 //// Bubbletea standard methods
@@ -31,6 +52,9 @@ func (s *ExplorerScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, nil
 		case "ctrl+c", "q":
 			return s, tea.Quit
+		case "o":
+			s.Parent.currentScreen = s.Parent.containerSelectionScreen
+			return s.Parent.containerSelectionScreen, nil
 		}
 	}
 	return s, nil
