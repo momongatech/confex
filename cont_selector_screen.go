@@ -45,6 +45,7 @@ func (a *ContainerSelectorScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			// TOOD: better accessing container pane
 			a.Parent.explorerScreen.Panes[1] = NewPane(a.Containers[a.CurIdx].ContainerName, Container, "/")
+			a.Parent.explorerScreen.Panes[1].Parent = a.Parent.explorerScreen
 			a.Parent.explorerScreen.Panes[1].ListDir()
 			a.Parent.currentScreen = a.Parent.explorerScreen
 			return a.Parent.explorerScreen, nil

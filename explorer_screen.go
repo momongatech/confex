@@ -7,11 +7,15 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+var FocusColor = lipgloss.AdaptiveColor{Dark: "#ffffff", Light: "#000000"}
+var NoFocusColor = lipgloss.AdaptiveColor{Dark: "#555555", Light: "#cccccc"}
+
 type ExplorerScreen struct {
-	Panes         []Pane
+	Panes         []*Pane
 	ActivePaneIdx int
 	Parent        *EntryApp
 	ScreenWidth   int
+	ScreenHeight  int
 }
 
 func NewExplorerScreen() *ExplorerScreen {
@@ -22,13 +26,18 @@ func NewExplorerScreen() *ExplorerScreen {
 	containerPane := NewPane("crunner", Container, "/")
 	containerPane.ListDir()
 
-	return &ExplorerScreen{
-		Panes: []Pane{
+	s := &ExplorerScreen{
+		Panes: []*Pane{
 			hostPane,
 			containerPane,
 		},
 		ActivePaneIdx: 0,
 	}
+
+	containerPane.Parent = s
+	hostPane.Parent = s
+
+	return s
 }
 
 //// Bubbletea standard methods
@@ -62,39 +71,29 @@ func (s *ExplorerScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tea.WindowSizeMsg:
 		s.ScreenWidth = msg.Width
+		s.ScreenHeight = msg.Height
 	}
 	return s, nil
+}
+
+func getColor(activeIdx int, currIdx int) lipgloss.AdaptiveColor {
+	if activeIdx == currIdx {
+		return FocusColor
+	}
+	return NoFocusColor
 }
 
 func (s *ExplorerScreen) View() string {
 	rows := ""
 
-	tabItems := []string{}
-	for i, p := range s.Panes {
-		if i == s.ActivePaneIdx {
-			tabItems = append(tabItems, lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder(), true).
-				Align(lipgloss.Center).
-				Padding(0, 2).
-				UnsetBorderBottom().
-				Render(p.Name))
-		} else {
-			tabItems = append(tabItems, lipgloss.NewStyle().
-				Border(lipgloss.HiddenBorder(), true).
-				Align(lipgloss.Center).
-				Padding(0, 2).
-				Render(p.Name))
-		}
-	}
+	paneStyle := lipgloss.NewStyle().
+		Width((s.ScreenWidth-4)/2).
+		Height(s.ScreenHeight-5).
+		Border(lipgloss.RoundedBorder(), true)
 
-	tab := lipgloss.JoinHorizontal(lipgloss.Top, tabItems...)
-	rows += tab
-	rows += "\n"
-
-	paneStyle := lipgloss.NewStyle().Width((s.ScreenWidth-4)/2).Border(lipgloss.RoundedBorder(), true).Height(20)
 	rows += lipgloss.JoinHorizontal(lipgloss.Top,
-		paneStyle.Render(s.Panes[0].RenderPane()),
-		paneStyle.Render(s.Panes[1].RenderPane()),
+		paneStyle.BorderForeground(getColor(s.ActivePaneIdx, 0)).Render(s.Panes[0].RenderPane()),
+		paneStyle.BorderForeground(getColor(s.ActivePaneIdx, 1)).Render(s.Panes[1].RenderPane()),
 	)
 	return rows
 }

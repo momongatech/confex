@@ -10,6 +10,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 )
@@ -27,6 +28,7 @@ type Pane struct {
 	Items  []string
 	Name   string
 	PType  PaneType
+	Parent *ExplorerScreen
 }
 
 func runCommand(cmd string) (string, int) {
@@ -56,8 +58,8 @@ func runCommand(cmd string) (string, int) {
 	return output, exitCode
 }
 
-func NewPane(paneName string, pType PaneType, cwd string) Pane {
-	return Pane{
+func NewPane(paneName string, pType PaneType, cwd string) *Pane {
+	return &Pane{
 		Cwd:   cwd,
 		Name:  paneName,
 		PType: pType,
@@ -76,12 +78,30 @@ func (p *Pane) CursorInc(amount int) {
 
 func (p *Pane) RenderPane() string {
 	rows := ""
+
+	isFocused := p.Parent.Panes[p.Parent.ActivePaneIdx] == p
+	color := FocusColor
+	if !isFocused {
+		color = NoFocusColor
+	}
+
+	// Render panel title containing host name
+	// and Cwd
+	paneTitleStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder(), true).
+		BorderForeground(color).
+		Width(p.Parent.ScreenWidth/2 - 4).
+		Faint(!isFocused)
+
+	hostnameStyle := lipgloss.NewStyle().Bold(true).Padding(0, 1).Faint(!isFocused)
+	rows += paneTitleStyle.Render(fmt.Sprintf("%s: %s", hostnameStyle.Render(p.Name), p.Cwd)) + "\n"
+
 	for i, item := range p.Items {
-		ptrChar := "  "
+		ptrChar := "   "
 		if i == p.CurIdx {
-			ptrChar = "> "
+			ptrChar = " > "
 		}
-		rows += ptrChar + item + "\n"
+		rows += lipgloss.NewStyle().Foreground(color).Render(ptrChar+" ☐ "+item) + "\n"
 	}
 	return rows
 }
