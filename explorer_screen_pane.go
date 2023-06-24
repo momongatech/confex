@@ -16,19 +16,32 @@ import (
 )
 
 type PaneType int
+type PaneItemType int
 
 const (
 	Host PaneType = iota
 	Container
 )
 
+const (
+	PaneItemTypeFolder int = iota
+	PaneItemTypeFile
+)
+
+type PaneItem struct {
+	Path     string
+	ItemType PaneItemType
+}
+
 type Pane struct {
-	Cwd    string
-	CurIdx int
-	Items  []string
-	Name   string
-	PType  PaneType
-	Parent *ExplorerScreen
+	Cwd        string
+	PaneOffset int
+	PaneRows   int
+	CurIdx     int
+	Items      []string
+	Name       string
+	PType      PaneType
+	Parent     *ExplorerScreen
 }
 
 func runCommand(cmd string) (string, int) {
@@ -68,12 +81,36 @@ func NewPane(paneName string, pType PaneType, cwd string) *Pane {
 
 func (p *Pane) CursorInc(amount int) {
 	p.CurIdx += amount
+
 	if p.CurIdx < 0 {
 		p.CurIdx = 0
 	}
-	if p.CurIdx > len(p.Items)-1 {
-		p.CurIdx = len(p.Items) - 1
+
+	if p.CurIdx < p.PaneOffset {
+		p.PaneOffset = p.CurIdx
 	}
+
+	// if the cursor index is greater than the last visible row in the pane
+	if p.CurIdx >= p.PaneOffset+p.PaneRows {
+		p.PaneOffset = p.CurIdx - p.PaneRows + 1
+	}
+
+	// if the pane offset is greater than the difference between the length of items and the number of pane rows
+	if p.PaneOffset > len(p.Items)-p.PaneRows {
+		p.PaneOffset = max(0, len(p.Items)-p.PaneRows)
+	}
+
+	// if the cursor index is greater than the last item index
+	if p.CurIdx >= len(p.Items) {
+		p.CurIdx = max(0, len(p.Items)-1)
+	}
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func (p *Pane) RenderPane() string {
@@ -93,15 +130,19 @@ func (p *Pane) RenderPane() string {
 		Width(p.Parent.ScreenWidth/2 - 4).
 		Faint(!isFocused)
 
-	hostnameStyle := lipgloss.NewStyle().Bold(true).Padding(0, 1).Faint(!isFocused)
-	rows += paneTitleStyle.Render(fmt.Sprintf("%s: %s", hostnameStyle.Render(p.Name), p.Cwd)) + "\n"
+	cwdStyle := lipgloss.NewStyle().Foreground(color)
+	rows += paneTitleStyle.Render(cwdStyle.Render(fmt.Sprintf("%s: %s", p.Name, p.Cwd))) + "\n"
 
-	for i, item := range p.Items {
-		ptrChar := "   "
-		if i == p.CurIdx {
-			ptrChar = " > "
+	// Render listed items within pane viewport
+	for i := p.PaneOffset; i < p.PaneOffset+p.PaneRows; i += 1 {
+		if i < len(p.Items) {
+			item := p.Items[i]
+			ptrChar := "   "
+			if i == p.CurIdx {
+				ptrChar = " > "
+			}
+			rows += lipgloss.NewStyle().Foreground(color).Render(ptrChar+" ☐ "+item) + "\n"
 		}
-		rows += lipgloss.NewStyle().Foreground(color).Render(ptrChar+" ☐ "+item) + "\n"
 	}
 	return rows
 }

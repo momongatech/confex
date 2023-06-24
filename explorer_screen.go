@@ -8,7 +8,7 @@ import (
 )
 
 var FocusColor = lipgloss.AdaptiveColor{Dark: "#ffffff", Light: "#000000"}
-var NoFocusColor = lipgloss.AdaptiveColor{Dark: "#555555", Light: "#cccccc"}
+var NoFocusColor = lipgloss.AdaptiveColor{Dark: "#555555", Light: "#eeeeee"}
 
 type ExplorerScreen struct {
 	Panes         []*Pane
@@ -72,6 +72,9 @@ func (s *ExplorerScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		s.ScreenWidth = msg.Width
 		s.ScreenHeight = msg.Height
+		for _, p := range s.Panes {
+			p.PaneRows = s.ScreenHeight - 5
+		}
 	}
 	return s, nil
 }

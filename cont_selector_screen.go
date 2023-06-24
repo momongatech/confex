@@ -46,6 +46,7 @@ func (a *ContainerSelectorScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// TOOD: better accessing container pane
 			a.Parent.explorerScreen.Panes[1] = NewPane(a.Containers[a.CurIdx].ContainerName, Container, "/")
 			a.Parent.explorerScreen.Panes[1].Parent = a.Parent.explorerScreen
+			a.Parent.explorerScreen.Panes[1].PaneRows = a.Parent.explorerScreen.Panes[1].Parent.ScreenHeight - 9
 			a.Parent.explorerScreen.Panes[1].ListDir()
 			a.Parent.currentScreen = a.Parent.explorerScreen
 			return a.Parent.explorerScreen, nil
