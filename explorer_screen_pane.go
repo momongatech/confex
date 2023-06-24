@@ -24,13 +24,14 @@ const (
 )
 
 const (
-	PaneItemTypeFolder int = iota
+	PaneItemTypeDirectory PaneItemType = iota
 	PaneItemTypeFile
 )
 
 type PaneItem struct {
 	Path     string
 	ItemType PaneItemType
+	Selected bool
 }
 
 type Pane struct {
@@ -38,7 +39,7 @@ type Pane struct {
 	PaneOffset int
 	PaneRows   int
 	CurIdx     int
-	Items      []string
+	Items      []PaneItem
 	Name       string
 	PType      PaneType
 	Parent     *ExplorerScreen
@@ -117,9 +118,15 @@ func (p *Pane) RenderPane() string {
 	rows := ""
 
 	isFocused := p.Parent.Panes[p.Parent.ActivePaneIdx] == p
+
+	dirColor := lipgloss.AdaptiveColor{Light: "#6554AF", Dark: "#6554AF"}
+	fileColor := lipgloss.AdaptiveColor{Light: "#E966A0", Dark: "#E966A0"}
+
 	color := FocusColor
 	if !isFocused {
 		color = NoFocusColor
+		dirColor = NoFocusColor
+		fileColor = NoFocusColor
 	}
 
 	// Render panel title containing host name
@@ -131,7 +138,12 @@ func (p *Pane) RenderPane() string {
 		Faint(!isFocused)
 
 	cwdStyle := lipgloss.NewStyle().Foreground(color)
-	rows += paneTitleStyle.Render(cwdStyle.Render(fmt.Sprintf("%s: %s", p.Name, p.Cwd))) + "\n"
+
+	machineIcon := " 🏠 "
+	if p.PType == Container {
+		machineIcon = " 🐳 "
+	}
+	rows += paneTitleStyle.Render(cwdStyle.Render(fmt.Sprintf("%s %s: %s", machineIcon, p.Name, p.Cwd))) + "\n"
 
 	// Render listed items within pane viewport
 	for i := p.PaneOffset; i < p.PaneOffset+p.PaneRows; i += 1 {
@@ -139,18 +151,43 @@ func (p *Pane) RenderPane() string {
 			item := p.Items[i]
 			ptrChar := "   "
 			if i == p.CurIdx {
-				ptrChar = " > "
+				ptrChar = " ► "
 			}
-			rows += lipgloss.NewStyle().Foreground(color).Render(ptrChar+" ☐ "+item) + "\n"
+
+			var pathStyle lipgloss.Style
+			if item.ItemType == PaneItemTypeDirectory {
+				pathStyle = lipgloss.NewStyle().Foreground(dirColor).Bold(true).Italic(true)
+			} else {
+				pathStyle = lipgloss.NewStyle().Foreground(fileColor)
+			}
+
+			checkBox := lipgloss.NewStyle().Faint(true).Render(" ☐ ")
+			if item.Selected {
+				checkBox = " ☑ "
+			}
+			rows += lipgloss.NewStyle().Foreground(color).Render(ptrChar+checkBox) + pathStyle.Render(item.Path) + "\n"
 		}
 	}
 	return rows
 }
 
+func (p *Pane) PopulateItems(items []string) {
+	for _, i := range items {
+		item := PaneItem{}
+		item.Path = i
+		if strings.HasSuffix(i, "/") {
+			item.ItemType = PaneItemType(PaneItemTypeDirectory)
+		} else {
+			item.ItemType = PaneItemType(PaneItemTypeFile)
+		}
+		p.Items = append(p.Items, item)
+	}
+}
+
 func (p *Pane) ListDir() error {
 	items := []string{}
 	if p.PType == Host {
-		out, code := runCommand(fmt.Sprintf("ls -F %s", p.Cwd))
+		out, code := runCommand(fmt.Sprintf("ls -p %s", p.Cwd))
 		if code != 0 {
 			return errors.New("`ls` command on host failed")
 		}
@@ -167,7 +204,7 @@ func (p *Pane) ListDir() error {
 		optionsCreate := types.ExecConfig{
 			AttachStdout: true,
 			AttachStderr: true,
-			Cmd:          []string{"ls", "-F", p.Cwd},
+			Cmd:          []string{"ls", "-p", p.Cwd},
 		}
 
 		res, err := cli.ContainerExecCreate(ctx, p.Name, optionsCreate)
@@ -186,9 +223,8 @@ func (p *Pane) ListDir() error {
 			return err
 		}
 		items = strings.Split(strings.TrimSpace(string(out)), "\n")
-		p.Items = items
 	}
 
-	p.Items = items
+	p.PopulateItems(items)
 	return nil
 }

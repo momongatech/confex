@@ -49,6 +49,7 @@ func (a *ContainerSelectorScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.Parent.explorerScreen.Panes[1].PaneRows = a.Parent.explorerScreen.Panes[1].Parent.ScreenHeight - 9
 			a.Parent.explorerScreen.Panes[1].ListDir()
 			a.Parent.currentScreen = a.Parent.explorerScreen
+			a.Parent.explorerScreen.ActivePaneIdx = 1
 			return a.Parent.explorerScreen, nil
 		case "up", "k":
 			a.CursorInc(-1)
@@ -69,7 +70,7 @@ func (a *ContainerSelectorScreen) View() string {
 		if i == a.CurIdx {
 			ptrChar = "> "
 		}
-		rows += fmt.Sprintf("%s %s  %s\n", ptrChar, c.ContainerId, c.ContainerName)
+		rows += fmt.Sprintf("%s %s  %s\n", ptrChar, c.ContainerId[:8], c.ContainerName)
 	}
 	return rows
 }

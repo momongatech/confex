@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -64,6 +65,10 @@ func (s *ExplorerScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, nil
 		case "ctrl+c", "q":
 			return s, tea.Quit
+		case " ":
+			activePane := s.Panes[s.ActivePaneIdx]
+			activePane.Items[activePane.CurIdx].Selected = !activePane.Items[activePane.CurIdx].Selected
+			return s, nil
 		case "o":
 			s.Parent.currentScreen = s.Parent.containerSelectionScreen
 			s.Parent.containerSelectionScreen.RefreshContainerList()
@@ -73,7 +78,7 @@ func (s *ExplorerScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		s.ScreenWidth = msg.Width
 		s.ScreenHeight = msg.Height
 		for _, p := range s.Panes {
-			p.PaneRows = s.ScreenHeight - 5
+			p.PaneRows = s.ScreenHeight - 9
 		}
 	}
 	return s, nil
@@ -89,15 +94,27 @@ func getColor(activeIdx int, currIdx int) lipgloss.AdaptiveColor {
 func (s *ExplorerScreen) View() string {
 	rows := ""
 
+	// Pane gemetry styling
 	paneStyle := lipgloss.NewStyle().
 		Width((s.ScreenWidth-4)/2).
 		Height(s.ScreenHeight-5).
 		Border(lipgloss.RoundedBorder(), true)
 
+	// Render two panes side by side
 	rows += lipgloss.JoinHorizontal(lipgloss.Top,
 		paneStyle.BorderForeground(getColor(s.ActivePaneIdx, 0)).Render(s.Panes[0].RenderPane()),
 		paneStyle.BorderForeground(getColor(s.ActivePaneIdx, 1)).Render(s.Panes[1].RenderPane()),
 	)
+	rows += "\n"
+
+	// Hint character styling
+	cStyle := lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#64CCC5", Dark: "#64CCC5"})
+
+	rows += fmt.Sprintf(
+		"%s: Open container list    %s: Quit\n",
+		cStyle.Render("\"o\""),
+		cStyle.Render("\"q\""))
+
 	return rows
 }
 
