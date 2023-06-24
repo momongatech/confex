@@ -5,9 +5,13 @@ import (
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 )
+
+var ContainerIdTextColor = lipgloss.AdaptiveColor{Light: "#6554AF", Dark: "#6554AF"}
+var ContainerNameTextColor = lipgloss.AdaptiveColor{Light: "#E966A0", Dark: "#E966A0"}
 
 type ContainerListItem struct {
 	ContainerName string
@@ -43,13 +47,11 @@ func (a *ContainerSelectorScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "enter":
-			// TOOD: better accessing container pane
-			a.Parent.explorerScreen.Panes[1] = NewPane(a.Containers[a.CurIdx].ContainerName, Container, "/")
-			a.Parent.explorerScreen.Panes[1].Parent = a.Parent.explorerScreen
-			a.Parent.explorerScreen.Panes[1].PaneRows = a.Parent.explorerScreen.Panes[1].Parent.ScreenHeight - 9
-			a.Parent.explorerScreen.Panes[1].ListDir()
-			a.Parent.currentScreen = a.Parent.explorerScreen
+			a.Parent.explorerScreen.ListDirContainer(a.Containers[a.CurIdx].ContainerName, "/")
 			a.Parent.explorerScreen.ActivePaneIdx = 1
+			a.Parent.currentScreen = a.Parent.explorerScreen
+			return a.Parent.explorerScreen, nil
+		case "q":
 			return a.Parent.explorerScreen, nil
 		case "up", "k":
 			a.CursorInc(-1)
@@ -58,20 +60,50 @@ func (a *ContainerSelectorScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.CursorInc(+1)
 			return a, nil
 		}
+	case tea.WindowSizeMsg:
+		a.Parent.ScreenHeight = msg.Height
+		a.Parent.ScreenWidth = msg.Width
 	}
 	return a, nil
 }
 
 func (a *ContainerSelectorScreen) View() string {
 	a.Init()
+
 	rows := ""
+
+	rows += lipgloss.NewStyle().
+		Width(a.Parent.ScreenWidth).
+		Align(lipgloss.Center).
+		Bold(true).
+		Render("Choose a container")
+	rows += "\n\n"
+
 	for i, c := range a.Containers {
-		ptrChar := "  "
+		ptrChar := "   "
 		if i == a.CurIdx {
-			ptrChar = "> "
+			ptrChar = " ► "
 		}
-		rows += fmt.Sprintf("%s %s  %s\n", ptrChar, c.ContainerId[:8], c.ContainerName)
+
+		containerIdStyle := lipgloss.NewStyle().Foreground(ContainerIdTextColor)
+		containerNameStyle := lipgloss.NewStyle().Foreground(ContainerNameTextColor)
+		rows += fmt.Sprintf("%s %s  %s\n", ptrChar, containerIdStyle.Render(c.ContainerId), containerNameStyle.Render(c.ContainerName))
 	}
+
+	boxLayout := lipgloss.NewStyle().
+		Width(a.Parent.ScreenWidth-2).
+		Height(a.Parent.ScreenHeight-4).
+		Padding(1).
+		Border(lipgloss.RoundedBorder(), true)
+
+	rows = boxLayout.Render(rows)
+	rows += "\n"
+
+	cStyle := lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#64CCC5", Dark: "#64CCC5"})
+	rows += fmt.Sprintf(
+		"%s: Back\n",
+		cStyle.Render("\"q\""))
+
 	return rows
 }
 

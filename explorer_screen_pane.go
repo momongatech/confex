@@ -115,18 +115,27 @@ func max(a, b int) int {
 }
 
 func (p *Pane) RenderPane() string {
+	if p.Name == "" {
+		return lipgloss.NewStyle().
+			Width(p.Parent.Parent.ScreenWidth/2).
+			Height(p.Parent.Parent.ScreenHeight/2).
+			Align(lipgloss.Center, lipgloss.Center).
+			Render("Open a container")
+	}
+
 	rows := ""
 
 	isFocused := p.Parent.Panes[p.Parent.ActivePaneIdx] == p
 
-	dirColor := lipgloss.AdaptiveColor{Light: "#6554AF", Dark: "#6554AF"}
-	fileColor := lipgloss.AdaptiveColor{Light: "#E966A0", Dark: "#E966A0"}
-
 	color := FocusColor
+
+	DirTextColor := lipgloss.AdaptiveColor{Light: "#6554AF", Dark: "#6554AF"}
+	FileTextColor := lipgloss.AdaptiveColor{Light: "#E966A0", Dark: "#E966A0"}
+
 	if !isFocused {
 		color = NoFocusColor
-		dirColor = NoFocusColor
-		fileColor = NoFocusColor
+		DirTextColor = NoFocusColor
+		FileTextColor = NoFocusColor
 	}
 
 	// Render panel title containing host name
@@ -134,7 +143,7 @@ func (p *Pane) RenderPane() string {
 	paneTitleStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder(), true).
 		BorderForeground(color).
-		Width(p.Parent.ScreenWidth/2 - 4).
+		Width(p.Parent.Parent.ScreenWidth/2 - 4).
 		Faint(!isFocused)
 
 	cwdStyle := lipgloss.NewStyle().Foreground(color)
@@ -143,7 +152,7 @@ func (p *Pane) RenderPane() string {
 	if p.PType == Container {
 		machineIcon = " 🐳 "
 	}
-	rows += paneTitleStyle.Render(cwdStyle.Render(fmt.Sprintf("%s %s: %s", machineIcon, p.Name, p.Cwd))) + "\n"
+	rows += paneTitleStyle.Render(cwdStyle.Render(fmt.Sprintf("%s %s: %s", machineIcon, strings.TrimPrefix(p.Name, "/"), p.Cwd))) + "\n"
 
 	// Render listed items within pane viewport
 	for i := p.PaneOffset; i < p.PaneOffset+p.PaneRows; i += 1 {
@@ -156,14 +165,17 @@ func (p *Pane) RenderPane() string {
 
 			var pathStyle lipgloss.Style
 			if item.ItemType == PaneItemTypeDirectory {
-				pathStyle = lipgloss.NewStyle().Foreground(dirColor).Bold(true).Italic(true)
+				pathStyle = lipgloss.NewStyle().Foreground(DirTextColor).Bold(true).Italic(true)
 			} else {
-				pathStyle = lipgloss.NewStyle().Foreground(fileColor)
+				pathStyle = lipgloss.NewStyle().Foreground(FileTextColor)
 			}
 
 			checkBox := lipgloss.NewStyle().Faint(true).Render(" ☐ ")
 			if item.Selected {
 				checkBox = " ☑ "
+			}
+			if item.Path == ".." {
+				checkBox = "   "
 			}
 			rows += lipgloss.NewStyle().Foreground(color).Render(ptrChar+checkBox) + pathStyle.Render(item.Path) + "\n"
 		}
@@ -172,6 +184,9 @@ func (p *Pane) RenderPane() string {
 }
 
 func (p *Pane) PopulateItems(items []string) {
+	p.Items = []PaneItem{}
+	p.Items = append(p.Items, PaneItem{Path: "..", ItemType: PaneItemTypeDirectory})
+
 	for _, i := range items {
 		item := PaneItem{}
 		item.Path = i
@@ -212,7 +227,7 @@ func (p *Pane) ListDir() error {
 			return err
 		}
 
-		response, err := cli.ContainerExecAttach(context.Background(), res.ID, types.ExecStartCheck{})
+		response, err := cli.ContainerExecAttach(context.Background(), res.ID, types.ExecStartCheck{Tty: true})
 		if err != nil {
 			return err
 		}

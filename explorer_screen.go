@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -15,8 +16,6 @@ type ExplorerScreen struct {
 	Panes         []*Pane
 	ActivePaneIdx int
 	Parent        *EntryApp
-	ScreenWidth   int
-	ScreenHeight  int
 }
 
 func NewExplorerScreen() *ExplorerScreen {
@@ -24,7 +23,7 @@ func NewExplorerScreen() *ExplorerScreen {
 	hostPane := NewPane("host", Host, wd)
 	hostPane.ListDir()
 
-	containerPane := NewPane("crunner", Container, "/")
+	containerPane := NewPane("", Container, "/")
 	containerPane.ListDir()
 
 	s := &ExplorerScreen{
@@ -63,6 +62,24 @@ func (s *ExplorerScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "right", "l":
 			s.CursorInc(+1)
 			return s, nil
+		case "enter":
+			activePane := s.Panes[s.ActivePaneIdx]
+			if activePane.Name == "" {
+				return s, nil
+			}
+
+			activePaneItem := activePane.Items[activePane.CurIdx]
+
+			if activePane.PType == Container {
+				if activePaneItem.ItemType == PaneItemTypeDirectory {
+					s.ListDirContainer(activePane.Name, path.Join(activePane.Cwd, activePaneItem.Path))
+				}
+			} else {
+				if activePaneItem.ItemType == PaneItemTypeDirectory {
+					s.ListDirHost(path.Join(activePane.Cwd, activePaneItem.Path))
+				}
+			}
+			return s, nil
 		case "ctrl+c", "q":
 			return s, tea.Quit
 		case " ":
@@ -75,11 +92,9 @@ func (s *ExplorerScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s.Parent.containerSelectionScreen, nil
 		}
 	case tea.WindowSizeMsg:
-		s.ScreenWidth = msg.Width
-		s.ScreenHeight = msg.Height
-		for _, p := range s.Panes {
-			p.PaneRows = s.ScreenHeight - 9
-		}
+		s.Parent.ScreenWidth = msg.Width
+		s.Parent.ScreenHeight = msg.Height
+
 	}
 	return s, nil
 }
@@ -92,12 +107,15 @@ func getColor(activeIdx int, currIdx int) lipgloss.AdaptiveColor {
 }
 
 func (s *ExplorerScreen) View() string {
+	for _, p := range s.Panes {
+		p.PaneRows = s.Parent.ScreenHeight - 8
+	}
 	rows := ""
 
-	// Pane gemetry styling
+	// Pane geometry styling
 	paneStyle := lipgloss.NewStyle().
-		Width((s.ScreenWidth-4)/2).
-		Height(s.ScreenHeight-5).
+		Width((s.Parent.ScreenWidth-4)/2).
+		Height(s.Parent.ScreenHeight-4).
 		Border(lipgloss.RoundedBorder(), true)
 
 	// Render two panes side by side
@@ -108,14 +126,35 @@ func (s *ExplorerScreen) View() string {
 	rows += "\n"
 
 	// Hint character styling
-	cStyle := lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#64CCC5", Dark: "#64CCC5"})
+	cStyle := lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#64CCC5", Dark: "#64CCC5"}).Bold(true)
+
+	copyLabel := "Copy to container"
+	if s.ActivePaneIdx == 1 {
+		copyLabel = "Copy to host"
+	}
 
 	rows += fmt.Sprintf(
-		"%s: Open container list    %s: Quit\n",
+		"%s: %s | %s: Open container list | %s: Quit\n",
+		cStyle.Render("\"c\""),
+		copyLabel,
 		cStyle.Render("\"o\""),
 		cStyle.Render("\"q\""))
 
 	return rows
+}
+
+func (s *ExplorerScreen) ListDirContainer(containerName string, pwd string) {
+	s.Panes[1] = NewPane(containerName, Container, pwd)
+	s.Panes[1].Parent = s
+	s.Panes[1].PaneRows = s.Panes[1].Parent.Parent.ScreenHeight - 8
+	s.Panes[1].ListDir()
+}
+
+func (s *ExplorerScreen) ListDirHost(pwd string) {
+	s.Panes[0] = NewPane("host", Host, pwd)
+	s.Panes[0].Parent = s
+	s.Panes[0].PaneRows = s.Panes[1].Parent.Parent.ScreenHeight - 8
+	s.Panes[0].ListDir()
 }
 
 //// App-specific methods

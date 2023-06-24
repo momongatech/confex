@@ -6,6 +6,8 @@ type EntryApp struct {
 	explorerScreen           *ExplorerScreen
 	containerSelectionScreen *ContainerSelectorScreen
 	currentScreen            tea.Model
+	ScreenWidth              int
+	ScreenHeight             int
 }
 
 func NewEntryApp(explorerScreen *ExplorerScreen, containerSelectorScreen *ContainerSelectorScreen) *EntryApp {
@@ -23,6 +25,11 @@ func (a *EntryApp) Init() tea.Cmd {
 }
 
 func (a *EntryApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		a.ScreenWidth = msg.Width
+		a.ScreenHeight = msg.Height
+	}
 	return a.currentScreen.Update(msg)
 }
 
