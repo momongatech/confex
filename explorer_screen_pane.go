@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os/exec"
+	"path"
 	"strings"
 	"syscall"
 
@@ -181,6 +182,26 @@ func (p *Pane) RenderPane() string {
 		}
 	}
 	return rows
+}
+
+func (p *Pane) DoCopy(otherPane *Pane) int {
+	fromPrefix := ""
+	toPrefix := fmt.Sprintf("%s:", otherPane.Name)
+	if p.PType == Container {
+		fromPrefix = fmt.Sprintf("%s:", p.Name)
+		toPrefix = ""
+	}
+	toDir := fmt.Sprintf("%s%s", toPrefix, otherPane.Cwd)
+	nCopied := 0
+	for _, i := range p.Items {
+		if i.Selected {
+			fromPath := fmt.Sprintf("%s%s", fromPrefix, path.Join(p.Cwd, i.Path))
+			cpCmd := fmt.Sprintf("docker cp %s %s", fromPath, toDir)
+			nCopied += 1
+			runCommand(cpCmd)
+		}
+	}
+	return nCopied
 }
 
 func (p *Pane) PopulateItems(items []string) {

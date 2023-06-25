@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -11,11 +13,15 @@ import (
 
 var FocusColor = lipgloss.AdaptiveColor{Dark: "#ffffff", Light: "#000000"}
 var NoFocusColor = lipgloss.AdaptiveColor{Dark: "#555555", Light: "#eeeeee"}
+var HintColor = lipgloss.AdaptiveColor{Light: "#64CCC5", Dark: "#64CCC5"}
 
 type ExplorerScreen struct {
 	Panes         []*Pane
 	ActivePaneIdx int
 	Parent        *EntryApp
+
+	StatusMsg     string
+	StatusMsgTick int
 }
 
 func NewExplorerScreen() *ExplorerScreen {
@@ -32,12 +38,23 @@ func NewExplorerScreen() *ExplorerScreen {
 			containerPane,
 		},
 		ActivePaneIdx: 0,
+		StatusMsgTick: 0,
 	}
 
 	containerPane.Parent = s
 	hostPane.Parent = s
 
 	return s
+}
+
+// Messages are events that we respond to in our Update function. This
+// particular one indicates that the timer has ticked.
+type tickMsg time.Time
+
+func (s *ExplorerScreen) tick() tea.Msg {
+	s.StatusMsgTick += 1
+	time.Sleep(time.Second)
+	return tickMsg{}
 }
 
 //// Bubbletea standard methods
@@ -62,6 +79,23 @@ func (s *ExplorerScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "right", "l":
 			s.CursorInc(+1)
 			return s, nil
+		case "c":
+			activePane := s.Panes[s.ActivePaneIdx]
+			otherPane := s.Panes[len(s.Panes)-1-s.ActivePaneIdx]
+			nCopied := 0
+			if otherPane.Name != "" {
+				nCopied = activePane.DoCopy(otherPane)
+				hintStyle := lipgloss.NewStyle().Foreground(HintColor).Bold(true)
+				s.StatusMsg = fmt.Sprintf("Copied %s files and/or folders from %s to %s",
+					hintStyle.Render(fmt.Sprintf("%d", nCopied)),
+					hintStyle.Render(activePane.Name),
+					hintStyle.Render(otherPane.Name),
+				)
+				// Refresh the pane to reflect newly copied files
+				otherPane.ListDir()
+				return s, s.tick
+			}
+			return s, nil
 		case "enter":
 			activePane := s.Panes[s.ActivePaneIdx]
 			if activePane.Name == "" {
@@ -84,17 +118,27 @@ func (s *ExplorerScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, tea.Quit
 		case " ":
 			activePane := s.Panes[s.ActivePaneIdx]
-			activePane.Items[activePane.CurIdx].Selected = !activePane.Items[activePane.CurIdx].Selected
+			if activePane.Items[activePane.CurIdx].Path != ".." {
+				activePane.Items[activePane.CurIdx].Selected = !activePane.Items[activePane.CurIdx].Selected
+			}
 			return s, nil
 		case "o":
 			s.Parent.currentScreen = s.Parent.containerSelectionScreen
 			s.Parent.containerSelectionScreen.RefreshContainerList()
 			return s.Parent.containerSelectionScreen, nil
 		}
+	case tickMsg:
+		if s.StatusMsgTick >= 2 {
+			s.StatusMsgTick = 0
+			s.StatusMsg = " "
+			return s, nil
+		}
+		return s, s.tick
 	case tea.WindowSizeMsg:
 		s.Parent.ScreenWidth = msg.Width
 		s.Parent.ScreenHeight = msg.Height
-
+	default:
+		return s, nil
 	}
 	return s, nil
 }
@@ -108,14 +152,14 @@ func getColor(activeIdx int, currIdx int) lipgloss.AdaptiveColor {
 
 func (s *ExplorerScreen) View() string {
 	for _, p := range s.Panes {
-		p.PaneRows = s.Parent.ScreenHeight - 8
+		p.PaneRows = s.Parent.ScreenHeight - 9
 	}
 	rows := ""
 
 	// Pane geometry styling
 	paneStyle := lipgloss.NewStyle().
 		Width((s.Parent.ScreenWidth-4)/2).
-		Height(s.Parent.ScreenHeight-4).
+		Height(s.Parent.ScreenHeight-5).
 		Border(lipgloss.RoundedBorder(), true)
 
 	// Render two panes side by side
@@ -126,7 +170,7 @@ func (s *ExplorerScreen) View() string {
 	rows += "\n"
 
 	// Hint character styling
-	cStyle := lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#64CCC5", Dark: "#64CCC5"}).Bold(true)
+	cStyle := lipgloss.NewStyle().Foreground(HintColor).Bold(true)
 
 	copyLabel := "Copy to container"
 	if s.ActivePaneIdx == 1 {
@@ -134,26 +178,31 @@ func (s *ExplorerScreen) View() string {
 	}
 
 	rows += fmt.Sprintf(
-		"%s: %s | %s: Open container list | %s: Quit\n",
+		"%s: %s | %s: Open container list | %s: Quit | %s: Select/deselect\n",
 		cStyle.Render("\"c\""),
 		copyLabel,
 		cStyle.Render("\"o\""),
-		cStyle.Render("\"q\""))
+		cStyle.Render("\"q\""),
+		cStyle.Render("space"),
+	)
+
+	rows += "\n"
+	rows += s.StatusMsg
 
 	return rows
 }
 
 func (s *ExplorerScreen) ListDirContainer(containerName string, pwd string) {
-	s.Panes[1] = NewPane(containerName, Container, pwd)
+	s.Panes[1] = NewPane(strings.TrimPrefix(containerName, "/"), Container, pwd)
 	s.Panes[1].Parent = s
-	s.Panes[1].PaneRows = s.Panes[1].Parent.Parent.ScreenHeight - 8
+	s.Panes[1].PaneRows = s.Panes[1].Parent.Parent.ScreenHeight - 9
 	s.Panes[1].ListDir()
 }
 
 func (s *ExplorerScreen) ListDirHost(pwd string) {
 	s.Panes[0] = NewPane("host", Host, pwd)
 	s.Panes[0].Parent = s
-	s.Panes[0].PaneRows = s.Panes[1].Parent.Parent.ScreenHeight - 8
+	s.Panes[0].PaneRows = s.Panes[1].Parent.Parent.ScreenHeight - 9
 	s.Panes[0].ListDir()
 }
 
