@@ -47,7 +47,7 @@ func (a *ContainerSelectorScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "enter":
-			a.Parent.explorerScreen.ListDirContainer(a.Containers[a.CurIdx].ContainerName, "/")
+			a.Parent.explorerScreen.RefreshDirContainerWithCwd(a.Containers[a.CurIdx].ContainerName, "/")
 			a.Parent.explorerScreen.ActivePaneIdx = 1
 			a.Parent.currentScreen = a.Parent.explorerScreen
 			return a.Parent.explorerScreen, nil

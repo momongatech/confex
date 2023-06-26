@@ -51,12 +51,6 @@ func NewExplorerScreen() *ExplorerScreen {
 // particular one indicates that the timer has ticked.
 type tickMsg time.Time
 
-func (s *ExplorerScreen) tick() tea.Msg {
-	s.StatusMsgTick += 1
-	time.Sleep(time.Second)
-	return tickMsg{}
-}
-
 //// Bubbletea standard methods
 
 func (s *ExplorerScreen) Init() tea.Cmd {
@@ -106,11 +100,11 @@ func (s *ExplorerScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			if activePane.PType == Container {
 				if activePaneItem.ItemType == PaneItemTypeDirectory {
-					s.ListDirContainer(activePane.Name, path.Join(activePane.Cwd, activePaneItem.Path))
+					s.RefreshDirContainerWithCwd(activePane.Name, path.Join(activePane.Cwd, activePaneItem.Path))
 				}
 			} else {
 				if activePaneItem.ItemType == PaneItemTypeDirectory {
-					s.ListDirHost(path.Join(activePane.Cwd, activePaneItem.Path))
+					s.RefreshDirHostWithCwd(path.Join(activePane.Cwd, activePaneItem.Path))
 				}
 			}
 			return s, nil
@@ -143,7 +137,9 @@ func (s *ExplorerScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return s, nil
 }
 
-func getColor(activeIdx int, currIdx int) lipgloss.AdaptiveColor {
+// Helper function to get the proper border color depending on whether
+// a pane is active or not
+func getBorderColor(activeIdx int, currIdx int) lipgloss.AdaptiveColor {
 	if activeIdx == currIdx {
 		return FocusColor
 	}
@@ -164,8 +160,8 @@ func (s *ExplorerScreen) View() string {
 
 	// Render two panes side by side
 	rows += lipgloss.JoinHorizontal(lipgloss.Top,
-		paneStyle.BorderForeground(getColor(s.ActivePaneIdx, 0)).Render(s.Panes[0].RenderPane()),
-		paneStyle.BorderForeground(getColor(s.ActivePaneIdx, 1)).Render(s.Panes[1].RenderPane()),
+		paneStyle.BorderForeground(getBorderColor(s.ActivePaneIdx, 0)).Render(s.Panes[0].RenderPane()),
+		paneStyle.BorderForeground(getBorderColor(s.ActivePaneIdx, 1)).Render(s.Panes[1].RenderPane()),
 	)
 	rows += "\n"
 
@@ -192,21 +188,21 @@ func (s *ExplorerScreen) View() string {
 	return rows
 }
 
-func (s *ExplorerScreen) ListDirContainer(containerName string, pwd string) {
-	s.Panes[1] = NewPane(strings.TrimPrefix(containerName, "/"), Container, pwd)
+//// App-specific methods
+
+func (s *ExplorerScreen) RefreshDirContainerWithCwd(containerName string, cwd string) {
+	s.Panes[1] = NewPane(strings.TrimPrefix(containerName, "/"), Container, cwd)
 	s.Panes[1].Parent = s
 	s.Panes[1].PaneRows = s.Panes[1].Parent.Parent.ScreenHeight - 9
 	s.Panes[1].ListDir()
 }
 
-func (s *ExplorerScreen) ListDirHost(pwd string) {
-	s.Panes[0] = NewPane("host", Host, pwd)
+func (s *ExplorerScreen) RefreshDirHostWithCwd(cwd string) {
+	s.Panes[0] = NewPane("host", Host, cwd)
 	s.Panes[0].Parent = s
 	s.Panes[0].PaneRows = s.Panes[1].Parent.Parent.ScreenHeight - 9
 	s.Panes[0].ListDir()
 }
-
-//// App-specific methods
 
 // Traverse over opened panes, jumping with specified amount.
 func (s *ExplorerScreen) CursorInc(amount int) {
@@ -217,4 +213,10 @@ func (s *ExplorerScreen) CursorInc(amount int) {
 	if s.ActivePaneIdx > len(s.Panes)-1 {
 		s.ActivePaneIdx = len(s.Panes) - 1
 	}
+}
+
+func (s *ExplorerScreen) tick() tea.Msg {
+	s.StatusMsgTick += 1
+	time.Sleep(time.Second)
+	return tickMsg{}
 }
