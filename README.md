@@ -4,6 +4,12 @@ Container file explorer: easy file access and transfer for your docker container
 
 ![navigate files in host and containers](assets/1.png)
 
+## Installation
+
+```bash
+$ go install github.com/momongatech/confex@latest
+```
+
 ## Usage
 
 | Keys               | Description                                                                                     |
