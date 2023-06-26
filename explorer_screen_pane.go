@@ -46,6 +46,7 @@ type Pane struct {
 	Parent     *ExplorerScreen
 }
 
+// Run shell command via `sh`
 func runCommand(cmd string) (string, int) {
 	command := exec.Command("/bin/sh", "-c", cmd)
 
@@ -66,10 +67,8 @@ func runCommand(cmd string) (string, int) {
 		}
 	}
 
-	// Combine stdout and stderr
+	// Combine stdout and stderr as the returned execution result
 	output := stdout.String() + stderr.String()
-
-	// Return combined output and exit code
 	return output, exitCode
 }
 
@@ -81,6 +80,7 @@ func NewPane(paneName string, pType PaneType, cwd string) *Pane {
 	}
 }
 
+// Move cursor in current pane, up or down
 func (p *Pane) CursorInc(amount int) {
 	p.CurIdx += amount
 
@@ -116,6 +116,10 @@ func max(a, b int) int {
 }
 
 func (p *Pane) RenderPane() string {
+	rows := ""
+
+	// When there's no container opened, just print a simple
+	// instruction for users
 	if p.Name == "" {
 		return lipgloss.NewStyle().
 			Width(p.Parent.Parent.ScreenWidth/2).
@@ -124,36 +128,36 @@ func (p *Pane) RenderPane() string {
 			Render("Open a container")
 	}
 
-	rows := ""
-
+	// Check if current panel is active
 	isFocused := p.Parent.Panes[p.Parent.ActivePaneIdx] == p
 
-	color := FocusColor
-
+	// Determine colors based on whether/not this panel is active
+	foreColor := FocusColor
 	DirTextColor := lipgloss.AdaptiveColor{Light: "#6554AF", Dark: "#6554AF"}
 	FileTextColor := lipgloss.AdaptiveColor{Light: "#E966A0", Dark: "#E966A0"}
-
 	if !isFocused {
-		color = NoFocusColor
+		foreColor = NoFocusColor
 		DirTextColor = NoFocusColor
 		FileTextColor = NoFocusColor
 	}
 
-	// Render panel title containing host name
-	// and Cwd
+	// Render panel title containing host name and Cwd
 	paneTitleStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder(), true).
-		BorderForeground(color).
+		BorderForeground(foreColor).
 		Width(p.Parent.Parent.ScreenWidth/2 - 4).
 		Faint(!isFocused)
 
-	cwdStyle := lipgloss.NewStyle().Foreground(color)
+	cwdStyle := lipgloss.NewStyle().Foreground(foreColor)
 
+	// Machine icon will be rendered at cwd
 	machineIcon := " 🏠 "
 	if p.PType == Container {
 		machineIcon = " 🐳 "
 	}
-	rows += paneTitleStyle.Render(cwdStyle.Render(fmt.Sprintf("%s %s: %s", machineIcon, strings.TrimPrefix(p.Name, "/"), p.Cwd))) + "\n"
+	rows += paneTitleStyle.Render(
+		cwdStyle.Render(fmt.Sprintf("%s %s: %s", machineIcon, strings.TrimPrefix(p.Name, "/"), p.Cwd)),
+	) + "\n"
 
 	// Render listed items within pane viewport
 	for i := p.PaneOffset; i < p.PaneOffset+p.PaneRows; i += 1 {
@@ -178,12 +182,14 @@ func (p *Pane) RenderPane() string {
 			if item.Path == ".." {
 				checkBox = "   "
 			}
-			rows += lipgloss.NewStyle().Foreground(color).Render(ptrChar+checkBox) + pathStyle.Render(item.Path) + "\n"
+			rows += lipgloss.NewStyle().Foreground(foreColor).Render(ptrChar+checkBox) + pathStyle.Render(item.Path) + "\n"
 		}
 	}
 	return rows
 }
 
+// Perform shell script for copying selected items in the current pane to the
+// target (in other pane's Cwd)
 func (p *Pane) DoCopy(otherPane *Pane) int {
 	fromPrefix := ""
 	toPrefix := fmt.Sprintf("%s:", otherPane.Name)
@@ -195,15 +201,22 @@ func (p *Pane) DoCopy(otherPane *Pane) int {
 	nCopied := 0
 	for _, i := range p.Items {
 		if i.Selected {
+			// Construct a string of copy command, e.g., `docker cp prefix:source-path prefix:target-path`
+			// For host machine, the prefix is an empty string, while for container, the prefix is `container-name:`
 			fromPath := fmt.Sprintf("%s%s", fromPrefix, path.Join(p.Cwd, i.Path))
 			cpCmd := fmt.Sprintf("docker cp %s %s", fromPath, toDir)
-			nCopied += 1
+
+			// Execute the copy command
 			runCommand(cpCmd)
+			nCopied += 1
 		}
 	}
 	return nCopied
 }
 
+// Convert a slice of string (file names as the result of executing `ls -p`) into
+// a slice of PaneItems, and assign it to p.Items. The conversion aims to further
+// extract information of a filename (e.g., whether it is a file, directory, etc)
 func (p *Pane) PopulateItems(items []string) {
 	p.Items = []PaneItem{}
 	p.Items = append(p.Items, PaneItem{Path: "..", ItemType: PaneItemTypeDirectory})
@@ -220,47 +233,68 @@ func (p *Pane) PopulateItems(items []string) {
 	}
 }
 
-func (p *Pane) ListDir() error {
-	items := []string{}
-	if p.PType == Host {
-		out, code := runCommand(fmt.Sprintf("ls -p %s", p.Cwd))
-		if code != 0 {
-			return errors.New("`ls` command on host failed")
-		}
-		out = strings.TrimSpace(out)
-		items = strings.Split(out, "\n")
-	} else if p.PType == Container {
-		cli, err := client.NewClientWithOpts(client.FromEnv)
-		if err != nil {
-			return err
-		}
+// List Cwd when current panel is a host machine
+func (p *Pane) ListDirHost() ([]string, error) {
+	out, code := runCommand(fmt.Sprintf("ls -p %s", p.Cwd))
+	if code != 0 {
+		return nil, errors.New("`ls` command on host failed")
+	}
+	out = strings.TrimSpace(out)
+	items := strings.Split(out, "\n")
+	return items, nil
+}
 
-		ctx := context.Background()
-		cli.NegotiateAPIVersion(ctx)
-		optionsCreate := types.ExecConfig{
-			AttachStdout: true,
-			AttachStderr: true,
-			Cmd:          []string{"ls", "-p", p.Cwd},
-		}
-
-		res, err := cli.ContainerExecCreate(ctx, p.Name, optionsCreate)
-		if err != nil {
-			return err
-		}
-
-		response, err := cli.ContainerExecAttach(context.Background(), res.ID, types.ExecStartCheck{Tty: true})
-		if err != nil {
-			return err
-		}
-		defer response.Close()
-
-		out, err := ioutil.ReadAll(response.Reader)
-		if err != nil {
-			return err
-		}
-		items = strings.Split(strings.TrimSpace(string(out)), "\n")
+// List Cwd when current panel is a container
+func (p *Pane) ListDirContainer() ([]string, error) {
+	cli, err := client.NewClientWithOpts(client.FromEnv)
+	if err != nil {
+		return nil, err
 	}
 
-	p.PopulateItems(items)
-	return nil
+	// Prepare docker cli client and the command to execute, i.e., ls
+	ctx := context.Background()
+	cli.NegotiateAPIVersion(ctx)
+	optionsCreate := types.ExecConfig{
+		AttachStdout: true,
+		AttachStderr: true,
+		Cmd:          []string{"ls", "-p", p.Cwd},
+	}
+
+	// Execute the ls command in tty mode
+	res, err := cli.ContainerExecCreate(ctx, p.Name, optionsCreate)
+	if err != nil {
+		return nil, err
+	}
+	response, err := cli.ContainerExecAttach(context.Background(), res.ID, types.ExecStartCheck{Tty: true})
+	if err != nil {
+		return nil, err
+	}
+	defer response.Close()
+
+	// Read all the resulted ls command execution
+	out, err := ioutil.ReadAll(response.Reader)
+	if err != nil {
+		return nil, err
+	}
+	items := strings.Split(strings.TrimSpace(string(out)), "\n")
+	return items, nil
+}
+
+// List directory contents
+func (p *Pane) ListDir() error {
+	if p.PType == Host {
+		items, err := p.ListDirHost()
+		if err != nil {
+			return err
+		}
+		p.PopulateItems(items)
+		return nil
+	} else {
+		items, err := p.ListDirContainer()
+		if err != nil {
+			return err
+		}
+		p.PopulateItems(items)
+		return nil
+	}
 }
