@@ -7,14 +7,14 @@ Container file explorer: easy file access and transfer for your docker container
 ## Installation
 
 ```bash
-$ go install github.com/momongatech/confex@latest
+$ go install github.com/momongatech/confex
 ```
 
 ## Usage
 
 | Keys               | Description                                                                                     |
 | ------------------ | ----------------------------------------------------------------------------------------------- |
-| `h`, `j`, `k`, `l` | Navigation                                                                                      |
+| `h`, `j`, `k`, `l` or arrow keys | Navigation                                                                                      |
 | `o`                | Open running container list                                                                     |
 | space              | Select/deselect items                                                                           |
 | `c`                | Copy selected items from active pane to the other pane                                          |
