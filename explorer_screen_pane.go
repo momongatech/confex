@@ -81,7 +81,7 @@ func NewPane(paneName string, pType PaneType, cwd string) *Pane {
 }
 
 // Move cursor in current pane, up or down
-func (p *Pane) CursorInc(amount int) {
+func (p *Pane) cursorInc(amount int) {
 	p.CurIdx += amount
 
 	if p.CurIdx < 0 {
@@ -108,13 +108,6 @@ func (p *Pane) CursorInc(amount int) {
 	}
 }
 
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 func (p *Pane) RenderPane() string {
 	rows := ""
 
@@ -128,10 +121,10 @@ func (p *Pane) RenderPane() string {
 			Render("Open a container")
 	}
 
-	// Check if current panel is active
+	// Check if current panel is active, then Determine colors based on
+	// whether/not this panel is active
 	isFocused := p.Parent.Panes[p.Parent.ActivePaneIdx] == p
 
-	// Determine colors based on whether/not this panel is active
 	foreColor := FocusColor
 	DirTextColor := lipgloss.AdaptiveColor{Light: "#6554AF", Dark: "#6554AF"}
 	FileTextColor := lipgloss.AdaptiveColor{Light: "#E966A0", Dark: "#E966A0"}
@@ -188,9 +181,11 @@ func (p *Pane) RenderPane() string {
 	return rows
 }
 
+//// App-specific methods
+
 // Perform shell script for copying selected items in the current pane to the
 // target (in other pane's Cwd)
-func (p *Pane) DoCopy(otherPane *Pane) int {
+func (p *Pane) executeFileAndDirCopy(otherPane *Pane) int {
 	fromPrefix := ""
 	toPrefix := fmt.Sprintf("%s:", otherPane.Name)
 	if p.PType == Container {
@@ -217,7 +212,7 @@ func (p *Pane) DoCopy(otherPane *Pane) int {
 // Convert a slice of string (file names as the result of executing `ls -p`) into
 // a slice of PaneItems, and assign it to p.Items. The conversion aims to further
 // extract information of a filename (e.g., whether it is a file, directory, etc)
-func (p *Pane) PopulateItems(items []string) {
+func (p *Pane) populateItems(items []string) {
 	p.Items = []PaneItem{}
 	p.Items = append(p.Items, PaneItem{Path: "..", ItemType: PaneItemTypeDirectory})
 
@@ -234,7 +229,7 @@ func (p *Pane) PopulateItems(items []string) {
 }
 
 // List Cwd when current panel is a host machine
-func (p *Pane) ListDirHost() ([]string, error) {
+func (p *Pane) listDirHost() ([]string, error) {
 	out, code := runCommand(fmt.Sprintf("ls -p %s", p.Cwd))
 	if code != 0 {
 		return nil, errors.New("`ls` command on host failed")
@@ -245,7 +240,7 @@ func (p *Pane) ListDirHost() ([]string, error) {
 }
 
 // List Cwd when current panel is a container
-func (p *Pane) ListDirContainer() ([]string, error) {
+func (p *Pane) listDirContainer() ([]string, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
 		return nil, err
@@ -281,20 +276,27 @@ func (p *Pane) ListDirContainer() ([]string, error) {
 }
 
 // List directory contents
-func (p *Pane) ListDir() error {
+func (p *Pane) listDir() error {
 	if p.PType == Host {
-		items, err := p.ListDirHost()
+		items, err := p.listDirHost()
 		if err != nil {
 			return err
 		}
-		p.PopulateItems(items)
+		p.populateItems(items)
 		return nil
 	} else {
-		items, err := p.ListDirContainer()
+		items, err := p.listDirContainer()
 		if err != nil {
 			return err
 		}
-		p.PopulateItems(items)
+		p.populateItems(items)
 		return nil
 	}
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }

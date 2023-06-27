@@ -27,10 +27,10 @@ type ExplorerScreen struct {
 func NewExplorerScreen() *ExplorerScreen {
 	wd, _ := os.Getwd()
 	hostPane := NewPane("host", Host, wd)
-	hostPane.ListDir()
+	hostPane.listDir()
 
 	containerPane := NewPane("", Container, "/")
-	containerPane.ListDir()
+	containerPane.listDir()
 
 	s := &ExplorerScreen{
 		Panes: []*Pane{
@@ -62,10 +62,10 @@ func (s *ExplorerScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "up", "k":
-			s.Panes[s.ActivePaneIdx].CursorInc(-1)
+			s.Panes[s.ActivePaneIdx].cursorInc(-1)
 			return s, nil
 		case "down", "j":
-			s.Panes[s.ActivePaneIdx].CursorInc(+1)
+			s.Panes[s.ActivePaneIdx].cursorInc(+1)
 			return s, nil
 		case "left", "h":
 			s.CursorInc(-1)
@@ -74,54 +74,27 @@ func (s *ExplorerScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			s.CursorInc(+1)
 			return s, nil
 		case "c":
-			activePane := s.Panes[s.ActivePaneIdx]
-			otherPane := s.Panes[len(s.Panes)-1-s.ActivePaneIdx]
-			nCopied := 0
-			if otherPane.Name != "" {
-				nCopied = activePane.DoCopy(otherPane)
-				hintStyle := lipgloss.NewStyle().Foreground(HintColor).Bold(true)
-				s.StatusMsg = fmt.Sprintf("Copied %s files and/or folders from %s to %s",
-					hintStyle.Render(fmt.Sprintf("%d", nCopied)),
-					hintStyle.Render(activePane.Name),
-					hintStyle.Render(otherPane.Name),
-				)
-				// Refresh the pane to reflect newly copied files
-				otherPane.ListDir()
-				return s, s.tick
-			}
-			return s, nil
+			return s.handleCopy()
 		case "enter":
-			activePane := s.Panes[s.ActivePaneIdx]
-			if activePane.Name == "" {
-				return s, nil
-			}
-
-			activePaneItem := activePane.Items[activePane.CurIdx]
-
-			if activePane.PType == Container {
-				if activePaneItem.ItemType == PaneItemTypeDirectory {
-					s.RefreshDirContainerWithCwd(activePane.Name, path.Join(activePane.Cwd, activePaneItem.Path))
-				}
-			} else {
-				if activePaneItem.ItemType == PaneItemTypeDirectory {
-					s.RefreshDirHostWithCwd(path.Join(activePane.Cwd, activePaneItem.Path))
-				}
-			}
-			return s, nil
+			return s.handleEnterFocusedItem()
 		case "ctrl+c", "q":
 			return s, tea.Quit
 		case " ":
+			// Handle select/deselect focused item in focused pane
 			activePane := s.Panes[s.ActivePaneIdx]
 			if activePane.Items[activePane.CurIdx].Path != ".." {
 				activePane.Items[activePane.CurIdx].Selected = !activePane.Items[activePane.CurIdx].Selected
 			}
 			return s, nil
 		case "o":
+			// Trigger opening container selection screen
 			s.Parent.currentScreen = s.Parent.containerSelectionScreen
-			s.Parent.containerSelectionScreen.RefreshContainerList()
+			s.Parent.containerSelectionScreen.refreshContainerList()
 			return s.Parent.containerSelectionScreen, nil
 		}
 	case tickMsg:
+		// Status message tick handling. We should cleaer status message and reset
+		// reset the counter when it reaches time out.
 		if s.StatusMsgTick >= 2 {
 			s.StatusMsgTick = 0
 			s.StatusMsg = " "
@@ -190,18 +163,57 @@ func (s *ExplorerScreen) View() string {
 
 //// App-specific methods
 
-func (s *ExplorerScreen) RefreshDirContainerWithCwd(containerName string, cwd string) {
+func (s *ExplorerScreen) handleCopy() (tea.Model, tea.Cmd) {
+	activePane := s.Panes[s.ActivePaneIdx]
+	otherPane := s.Panes[len(s.Panes)-1-s.ActivePaneIdx]
+	nCopied := 0
+	if otherPane.Name != "" {
+		nCopied = activePane.executeFileAndDirCopy(otherPane)
+		hintStyle := lipgloss.NewStyle().Foreground(HintColor).Bold(true)
+		s.StatusMsg = fmt.Sprintf("Copied %s files and/or folders from %s to %s",
+			hintStyle.Render(fmt.Sprintf("%d", nCopied)),
+			hintStyle.Render(activePane.Name),
+			hintStyle.Render(otherPane.Name),
+		)
+		// Refresh the pane to reflect newly copied files
+		otherPane.listDir()
+		return s, s.tick
+	}
+	return s, nil
+}
+
+func (s *ExplorerScreen) handleEnterFocusedItem() (tea.Model, tea.Cmd) {
+	activePane := s.Panes[s.ActivePaneIdx]
+	if activePane.Name == "" {
+		return s, nil
+	}
+
+	activePaneItem := activePane.Items[activePane.CurIdx]
+
+	if activePane.PType == Container {
+		if activePaneItem.ItemType == PaneItemTypeDirectory {
+			s.refreshDirContainerWithCwd(activePane.Name, path.Join(activePane.Cwd, activePaneItem.Path))
+		}
+	} else {
+		if activePaneItem.ItemType == PaneItemTypeDirectory {
+			s.refreshDirHostWithCwd(path.Join(activePane.Cwd, activePaneItem.Path))
+		}
+	}
+	return s, nil
+}
+
+func (s *ExplorerScreen) refreshDirContainerWithCwd(containerName string, cwd string) {
 	s.Panes[1] = NewPane(strings.TrimPrefix(containerName, "/"), Container, cwd)
 	s.Panes[1].Parent = s
 	s.Panes[1].PaneRows = s.Panes[1].Parent.Parent.ScreenHeight - 9
-	s.Panes[1].ListDir()
+	s.Panes[1].listDir()
 }
 
-func (s *ExplorerScreen) RefreshDirHostWithCwd(cwd string) {
+func (s *ExplorerScreen) refreshDirHostWithCwd(cwd string) {
 	s.Panes[0] = NewPane("host", Host, cwd)
 	s.Panes[0].Parent = s
 	s.Panes[0].PaneRows = s.Panes[1].Parent.Parent.ScreenHeight - 9
-	s.Panes[0].ListDir()
+	s.Panes[0].listDir()
 }
 
 // Traverse over opened panes, jumping with specified amount.

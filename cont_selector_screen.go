@@ -32,32 +32,22 @@ func (a *ContainerSelectorScreen) Init() tea.Cmd {
 	return nil
 }
 
-func (p *ContainerSelectorScreen) CursorInc(amount int) {
-	p.CurIdx += amount
-	if p.CurIdx < 0 {
-		p.CurIdx = 0
-	}
-	if p.CurIdx > len(p.Containers)-1 {
-		p.CurIdx = len(p.Containers) - 1
-	}
-}
-
 func (a *ContainerSelectorScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "enter":
-			a.Parent.explorerScreen.RefreshDirContainerWithCwd(a.Containers[a.CurIdx].ContainerName, "/")
+			a.Parent.explorerScreen.refreshDirContainerWithCwd(a.Containers[a.CurIdx].ContainerName, "/")
 			a.Parent.explorerScreen.ActivePaneIdx = 1
 			a.Parent.currentScreen = a.Parent.explorerScreen
 			return a.Parent.explorerScreen, nil
 		case "q":
 			return a.Parent.explorerScreen, nil
 		case "up", "k":
-			a.CursorInc(-1)
+			a.cursorInc(-1)
 			return a, nil
 		case "down", "j":
-			a.CursorInc(+1)
+			a.cursorInc(+1)
 			return a, nil
 		}
 	case tea.WindowSizeMsg:
@@ -107,7 +97,17 @@ func (a *ContainerSelectorScreen) View() string {
 	return rows
 }
 
-func (a *ContainerSelectorScreen) RefreshContainerList() {
+func (p *ContainerSelectorScreen) cursorInc(amount int) {
+	p.CurIdx += amount
+	if p.CurIdx < 0 {
+		p.CurIdx = 0
+	}
+	if p.CurIdx > len(p.Containers)-1 {
+		p.CurIdx = len(p.Containers) - 1
+	}
+}
+
+func (a *ContainerSelectorScreen) refreshContainerList() {
 	cli, err := client.NewClientWithOpts(client.FromEnv)
 	ctx := context.Background()
 	if err != nil {
