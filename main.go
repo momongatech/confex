@@ -17,7 +17,7 @@ func main() {
 	//
 	//	┏━━━━━━━━━━━━━━━━┓
 	//	┃  Root Program  ┃
-	//	┗━━━━━━━━━━━━━━━━┛                                ┌────────────────┐
+	//	┗━━━━━━━━━━━━━━━━┛                                        ┌────────────────┐
 	//			 │                                   ┌───▶│   Host pane    │
 	//			 │   ┌───────────────────────────┐   │    └────────────────┘
 	//			 ├──▶│   File Explorer Screen    │───┤
@@ -25,7 +25,7 @@ func main() {
 	//			 │                                   └───▶│ Container pane │
 	//			 │   ┌───────────────────────────┐        └────────────────┘
 	//			 └──▶│Container Selection Screen │
-	//				 └───────────────────────────┘
+	//			     └───────────────────────────┘
 
 	app := NewEntryApp(explorerScreen, containerSelectorScreen)
 	program := tea.NewProgram(app, tea.WithAltScreen())
